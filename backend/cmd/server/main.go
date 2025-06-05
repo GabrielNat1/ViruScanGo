@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/GabrielNat1/ViruScanGo/internal/config"
 	"github.com/GabrielNat1/ViruScanGo/internal/scanner"
@@ -17,6 +19,7 @@ var (
 
 func init() {
 	cfg = config.NewDefaultConfig()
+	scannerService = scanner.NewScanner()
 }
 
 func main() {
@@ -37,8 +40,37 @@ func handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "scan request received",
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error reading file: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	tempFile, err := os.CreateTemp("", "scan-*")
+	if err != nil {
+		http.Error(w, "Error creating temp file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	_, err = io.Copy(tempFile, file)
+	if err != nil {
+		http.Error(w, "Error saving file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	result, err := scannerService.ScanFile(r.Context(), tempFile.Name())
+	if err != nil {
+		http.Error(w, "Error scanning file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"filename":   header.Filename,
+		"infected":   result.IsInfected,
+		"threatName": result.ThreatName,
 	})
 }
 
