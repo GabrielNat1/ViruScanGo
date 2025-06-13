@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/GabrielNat1/ViruScanGo/internal/config"
 	"github.com/GabrielNat1/ViruScanGo/internal/scanner"
@@ -19,7 +20,11 @@ var (
 
 func init() {
 	cfg = config.NewDefaultConfig()
-	scannerService = scanner.NewScanner()
+	var err error
+	scannerService, err = scanner.NewScanner(filepath.Join(cfg.ScannerConfig.QuarantinePath))
+	if err != nil {
+		log.Fatalf("Could not initialize scanner: %v", err)
+	}
 }
 
 func main() {
@@ -30,6 +35,7 @@ func main() {
 func setupRoutes() {
 	http.HandleFunc("/api/scan", handleScan)
 	http.HandleFunc("/api/status", handleStatus)
+	http.HandleFunc("/api/quarantine/list", handleQuarantineList)
 }
 
 func handleScan(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +83,14 @@ func handleScan(w http.ResponseWriter, r *http.Request) {
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status": "running"}`)
+}
+
+func handleQuarantineList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Implementation will be added in next commit
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": "not implemented",
+	})
 }
 
 func startServer() {

@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/GabrielNat1/ViruScanGo/internal/quarantine"
 )
 
 type ScanResult struct {
@@ -16,6 +18,7 @@ type ScanResult struct {
 	ScanTime     time.Time
 	FileSize     int64
 	ScanDuration time.Duration
+	Quarantined  bool
 }
 
 type Scanner interface {
@@ -25,12 +28,19 @@ type Scanner interface {
 
 type DefaultScanner struct {
 	signatures []Signature
+	quarantine *quarantine.Quarantine
 }
 
-func NewScanner() *DefaultScanner {
+func NewScanner(quarantinePath string) (*DefaultScanner, error) {
+	q, err := quarantine.NewQuarantine(quarantinePath)
+	if err != nil {
+		return nil, err
+	}
+
 	return &DefaultScanner{
 		signatures: DefaultSignatures,
-	}
+		quarantine: q,
+	}, nil
 }
 
 func (s *DefaultScanner) ScanFile(ctx context.Context, filepath string) (*ScanResult, error) {
@@ -56,10 +66,16 @@ func (s *DefaultScanner) ScanFile(ctx context.Context, filepath string) (*ScanRe
 		}
 
 		if bytes.Contains(buffer[:n], sig.Pattern) {
+			err := s.quarantine.QuarantineFile(filepath, sig.Name)
+			if err != nil {
+				return nil, err
+			}
+
 			return &ScanResult{
-				Filename:   filepath,
-				IsInfected: true,
-				ThreatName: sig.Name,
+				Filename:    filepath,
+				IsInfected:  true,
+				ThreatName:  sig.Name,
+				Quarantined: true,
 			}, nil
 		}
 	}
